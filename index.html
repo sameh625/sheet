@@ -252,6 +252,163 @@
             outline: none;
             border-color: #667eea;
         }
+        
+        /* Responsive Design */
+        @media screen and (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 22px;
+                margin-bottom: 5px;
+            }
+            
+            .header p {
+                font-size: 14px;
+            }
+            
+            .tabs {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .tab {
+                font-size: 13px;
+                padding: 12px 10px;
+                white-space: nowrap;
+                min-width: 100px;
+            }
+            
+            .content {
+                padding: 15px;
+            }
+            
+            .input-section {
+                padding: 15px;
+            }
+            
+            .input-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .summary-cards {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .card {
+                padding: 20px;
+            }
+            
+            .card h3 {
+                font-size: 13px;
+            }
+            
+            .card .value {
+                font-size: 22px;
+            }
+            
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            table {
+                min-width: 600px;
+                font-size: 13px;
+            }
+            
+            th, td {
+                padding: 10px 8px;
+                font-size: 12px;
+            }
+            
+            .editable-cell input {
+                padding: 6px;
+                font-size: 13px;
+            }
+            
+            .btn {
+                width: 100%;
+                padding: 15px;
+                font-size: 15px;
+            }
+            
+            .warning-message {
+                font-size: 13px;
+                padding: 12px 15px;
+            }
+        }
+        
+        @media screen and (max-width: 480px) {
+            .header h1 {
+                font-size: 18px;
+            }
+            
+            .header p {
+                font-size: 12px;
+            }
+            
+            .tab {
+                font-size: 11px;
+                padding: 10px 8px;
+                min-width: 80px;
+            }
+            
+            .content {
+                padding: 10px;
+            }
+            
+            .input-section {
+                padding: 12px;
+                margin-bottom: 20px;
+            }
+            
+            .input-section h2 {
+                font-size: 16px;
+                margin-bottom: 15px;
+            }
+            
+            .card {
+                padding: 15px;
+            }
+            
+            .card h3 {
+                font-size: 12px;
+            }
+            
+            .card .value {
+                font-size: 20px;
+            }
+            
+            table {
+                min-width: 500px;
+                font-size: 11px;
+            }
+            
+            th, td {
+                padding: 8px 6px;
+                font-size: 11px;
+            }
+            
+            .btn {
+                font-size: 14px;
+                padding: 12px;
+            }
+        }
+        
+        @media screen and (min-width: 769px) and (max-width: 1024px) {
+            .input-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .summary-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
     </style>
 </head>
 <body>
