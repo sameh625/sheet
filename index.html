@@ -276,15 +276,15 @@
                     <div class="input-grid">
                         <div class="input-group">
                             <label>سعر الوحدة (جنيه)</label>
-                            <input type="number" id="unitPrice" value="10000000" oninput="calculate()">
+                            <input type="number" id="unitPrice" value="1000000" oninput="calculate()">
                         </div>
                         <div class="input-group">
                             <label>نسبة الفائدة السنوية (%)</label>
-                            <input type="number" id="interestRate" value="10" step="0.1" min="0" max="100" oninput="calculate()">
+                            <input type="number" id="interestRate" value="5" step="0.1" min="0" max="100" oninput="calculate()">
                         </div>
                         <div class="input-group">
                             <label>نسبة الخصم المبكر السنوي (%)</label>
-                            <input type="number" id="discountRate" value="5" step="0.1" min="0" max="100" oninput="calculate()">
+                            <input type="number" id="discountRate" value="3" step="0.1" min="0" max="100" oninput="calculate()">
                         </div>
                         <div class="input-group">
                             <label>تاريخ بداية السداد</label>
@@ -732,6 +732,51 @@
             actualDefaultTotal = baseTotal;
             document.getElementById('defaultTotal').textContent = formatCurrency(actualDefaultTotal) + ' ج.م';
             
+            // إعادة حساب الخطة المخصصة بناءً على التعديلات في الخطة الافتراضية
+            try {
+                const unitPrice = parseFloat(document.getElementById('unitPrice').value) || 0;
+                const customYears = parseFloat(document.getElementById('customYears').value) || 6;
+                const defaultYears = parseFloat(document.getElementById('defaultYears').value) || 6;
+                const startDate = new Date(document.getElementById('startDate').value);
+                const interestRate = parseFloat(document.getElementById('interestRate').value) || 0;
+                const discountRate = parseFloat(document.getElementById('discountRate').value) || 0;
+                
+                // إعادة حساب الخطة المخصصة
+                const customYearsVal = parseFloat(document.getElementById('customYears').value) || 6;
+                const yearsDiff = customYearsVal - defaultYears;
+                let customBaseTotal = unitPrice;
+                
+                if (yearsDiff > 0) {
+                    const r = (interestRate || 0) / 100;
+                    customBaseTotal = unitPrice * Math.pow(1 + r, yearsDiff);
+                } else if (yearsDiff < 0) {
+                    const d = (discountRate || 0) / 100;
+                    customBaseTotal = unitPrice / Math.pow(1 + d, Math.abs(yearsDiff));
+                }
+                
+                const defaultFlows = buildDefaultPlanFlowsFromTable(defaultYears, startDate);
+                const customFlows = buildCustomPlanFlowsFromTable(customYearsVal, startDate);
+                const timingAdjustment = computeTimingAdjustment(unitPrice, defaultFlows, customFlows, interestRate, discountRate);
+                
+                actualCustomTotal = customBaseTotal + timingAdjustment;
+                document.getElementById('customTotal').textContent = formatCurrency(actualCustomTotal) + ' ج.م';
+                
+                const diff = actualCustomTotal - actualDefaultTotal;
+                document.getElementById('customDiff').textContent = formatCurrency(Math.abs(diff)) + ' ج.م';
+                if (diff > 0) {
+                    document.getElementById('customDiffType').textContent = 'زيادة عن الافتراضية';
+                    document.getElementById('customDiffType').style.color = '#dc3545';
+                } else if (diff < 0) {
+                    document.getElementById('customDiffType').textContent = 'توفير عن الافتراضية';
+                    document.getElementById('customDiffType').style.color = '#28a745';
+                } else {
+                    document.getElementById('customDiffType').textContent = 'نفس الخطة الافتراضية';
+                    document.getElementById('customDiffType').style.color = '#667eea';
+                }
+            } catch (e) {
+                console.warn('Custom plan update skipped:', e);
+            }
+            
             // تحديث المقارنات عند التعديل على الخطة الافتراضية
             setTimeout(() => {
                 const unitPrice = parseFloat(document.getElementById('unitPrice').value) || 0;
@@ -833,16 +878,18 @@
             let remaining = total;
             let currentDate = new Date(startDate);
             
-            // المقدم
-            const downPaymentPercentage = savedCustomValues[planKey][0] || 10;
-            const downPayment = total * (downPaymentPercentage / 100);
+            // المقدم - استخدام القيمة المحفوظة أو الافتراضية (10%)
+            const downPercent = (savedCustomValues[planKey] && savedCustomValues[planKey][0] != null)
+                ? (parseFloat(savedCustomValues[planKey][0]) || 10) : 10;
+            
+            const downPayment = total * (downPercent / 100);
             remaining -= downPayment;
             tbody.innerHTML += `
                 <tr class="highlight">
                     <td>0</td>
                     <td>${formatDate(currentDate)}</td>
                     <td class="editable-cell">
-                        <input type="number" step="0.01" min="0" max="100" value="${downPaymentPercentage.toFixed(2)}" 
+                        <input type="number" step="0.01" min="0" max="100" value="${downPercent.toFixed(2)}" 
                                onchange="saveAndUpdateInstallment(0, ${total}, '${planKey}')" 
                                data-row="0">
                     </td>
@@ -851,13 +898,15 @@
                 </tr>
             `;
             
-            // حساب الأقساط بناءً على عدد السنين
-            const installmentAmount = (total * 0.9) / totalInstallments;
-            const installmentPercentage = (installmentAmount / total) * 100;
+            // حساب الأقساط بناءً على عدد السنين - توزيع متساوي للباقي
+            const remainingPercent = 100 - downPercent;
+            const installmentPercent = remainingPercent / totalInstallments;
             
             for (let i = 1; i <= totalInstallments; i++) {
                 currentDate = addMonths(currentDate, 3);
-                const percentage = savedCustomValues[planKey][i] || installmentPercentage;
+                const percentage = (savedCustomValues[planKey] && savedCustomValues[planKey][i] != null)
+                    ? (parseFloat(savedCustomValues[planKey][i]) || 0)
+                    : installmentPercent;
                 const amount = total * (percentage / 100);
                 remaining -= amount;
                 
@@ -878,30 +927,30 @@
             
             document.getElementById('customTableContainer').style.display = 'block';
             
-            // إعادة حساب المبلغ الإجمالي بناءً على القيم المحفوظة
-            if (savedCustomValues[planKey] && Object.keys(savedCustomValues[planKey]).length > 0) {
-                let totalPercentage = 0;
-                for (let rowNum in savedCustomValues[planKey]) {
-                    totalPercentage += savedCustomValues[planKey][rowNum];
-                }
-                actualCustomTotal = total * (totalPercentage / 100);
+            // تطبيق خصم/فوائد بناءً على تقديم/تأخير السداد مقارنة بالجدول الافتراضي
+            try {
+                // قراءة القيم الفعلية من الجداول بعد إنشائها
+                const defaultFlows = buildDefaultPlanFlowsFromTable(defaultYears, startDate);
+                const customFlows = buildCustomPlanFlowsFromTable(customYears, startDate);
+                const timingAdjustment = computeTimingAdjustment(unitPrice, defaultFlows, customFlows, interestRate, discountRate);
+
+                actualCustomTotal = total + timingAdjustment;
                 document.getElementById('customTotal').textContent = formatCurrency(actualCustomTotal) + ' ج.م';
-                
-                // تحديث الفرق
-                const diff = actualCustomTotal - actualDefaultTotal;
-                
-                document.getElementById('customDiff').textContent = formatCurrency(Math.abs(diff)) + ' ج.م';
-                
-                if (diff > 0) {
+
+                const updatedDiff = actualCustomTotal - actualDefaultTotal;
+                document.getElementById('customDiff').textContent = formatCurrency(Math.abs(updatedDiff)) + ' ج.م';
+                if (updatedDiff > 0) {
                     document.getElementById('customDiffType').textContent = 'زيادة عن الافتراضية';
                     document.getElementById('customDiffType').style.color = '#dc3545';
-                } else if (diff < 0) {
+                } else if (updatedDiff < 0) {
                     document.getElementById('customDiffType').textContent = 'توفير عن الافتراضية';
                     document.getElementById('customDiffType').style.color = '#28a745';
                 } else {
                     document.getElementById('customDiffType').textContent = 'نفس الخطة الافتراضية';
                     document.getElementById('customDiffType').style.color = '#667eea';
                 }
+            } catch (e) {
+                console.warn('Timing adjustment skipped:', e);
             }
             
             validateTotalPercentage();
@@ -913,6 +962,95 @@
                 const discountRate = parseFloat(document.getElementById('discountRate').value) || 0;
                 updateComparison(unitPrice, defaultYears, customYears, interestRate, discountRate);
             }, 0);
+        }
+
+        // يبني تدفقات الخطة الافتراضية من الجدول الفعلي: مصفوفة من { date, percent }
+        function buildDefaultPlanFlowsFromTable(years, startDate) {
+            const flows = [];
+            const tbody = document.getElementById('defaultTableBody');
+            const rows = tbody.querySelectorAll('tr');
+            let currentDate = new Date(startDate);
+            
+            rows.forEach((row, index) => {
+                const input = row.querySelector('input[type="number"]');
+                if (input) {
+                    const percent = parseFloat(input.value) || 0;
+                    flows.push({ date: new Date(currentDate), percent: percent });
+                    // كل قسط بعد 3 أشهر
+                    if (index < rows.length - 1) {
+                        currentDate = addMonths(currentDate, 3);
+                    }
+                }
+            });
+            
+            return flows;
+        }
+
+        // يبني تدفقات الخطة المخصصة من الجدول الفعلي: مصفوفة من { date, percent }
+        function buildCustomPlanFlowsFromTable(years, startDate) {
+            const flows = [];
+            const tbody = document.getElementById('customTableBody');
+            const rows = tbody.querySelectorAll('tr');
+            let currentDate = new Date(startDate);
+            
+            rows.forEach((row, index) => {
+                const input = row.querySelector('input[type="number"]');
+                if (input) {
+                    const percent = parseFloat(input.value) || 0;
+                    flows.push({ date: new Date(currentDate), percent: percent });
+                    // كل قسط بعد 3 أشهر
+                    if (index < rows.length - 1) {
+                        currentDate = addMonths(currentDate, 3);
+                    }
+                }
+            });
+            
+            return flows;
+        }
+
+        // يحسب فرق القيمة الزمنية: خصم للتقديم باستخدام discountRate، وفوائد للتأخير باستخدام interestRate
+        function computeTimingAdjustment(unitPrice, defaultFlows, customFlows, interestRate, discountRate) {
+            let i = 0, j = 0;
+            let remDef = defaultFlows.length ? (defaultFlows[0].percent || 0) : 0;
+            let remCus = customFlows.length ? (customFlows[0].percent || 0) : 0;
+            let adjustment = 0; // موجب = زيادة، سالب = خصم
+            const r = Math.max(0, (interestRate || 0) / 100);
+            const d = Math.max(0, (discountRate || 0) / 100);
+
+            const toYears = (from, to) => Math.max(0, (to.getTime() - from.getTime()) / (365.25 * 24 * 3600 * 1000));
+
+            while (i < defaultFlows.length && j < customFlows.length) {
+                const def = defaultFlows[i];
+                const cus = customFlows[j];
+                const move = Math.min(remDef, remCus);
+
+                if (move > 0) {
+                    if (cus.date < def.date) {
+                        // تقديم سداد: خصم
+                        const t = toYears(cus.date, def.date);
+                        const discount = unitPrice * (move / 100) * (1 - 1 / Math.pow(1 + d, t));
+                        adjustment -= discount;
+                    } else if (cus.date > def.date) {
+                        // تأخير سداد: فوائد
+                        const t = toYears(def.date, cus.date);
+                        const surcharge = unitPrice * (move / 100) * (Math.pow(1 + r, t) - 1);
+                        adjustment += surcharge;
+                    }
+                }
+
+                remDef -= move;
+                remCus -= move;
+                if (remDef <= 1e-9) {
+                    i++;
+                    remDef = i < defaultFlows.length ? (defaultFlows[i].percent || 0) : 0;
+                }
+                if (remCus <= 1e-9) {
+                    j++;
+                    remCus = j < customFlows.length ? (customFlows[j].percent || 0) : 0;
+                }
+            }
+
+            return adjustment;
         }
         
         function saveAndUpdateInstallment(rowIndex, total, planKey) {
@@ -1034,7 +1172,26 @@
         
         function updateCustomTotal(baseTotal) {
             const totalPercentage = validateTotalPercentage();
-            actualCustomTotal = baseTotal * (totalPercentage / 100);
+            let calculatedTotal = baseTotal * (totalPercentage / 100);
+            
+            // إعادة حساب timing adjustment بعد التعديل اليدوي
+            try {
+                const unitPrice = parseFloat(document.getElementById('unitPrice').value) || 0;
+                const customYears = parseFloat(document.getElementById('customYears').value) || 6;
+                const defaultYears = parseFloat(document.getElementById('defaultYears').value) || 6;
+                const startDate = new Date(document.getElementById('startDate').value);
+                const interestRate = parseFloat(document.getElementById('interestRate').value) || 0;
+                const discountRate = parseFloat(document.getElementById('discountRate').value) || 0;
+                
+                const defaultFlows = buildDefaultPlanFlowsFromTable(defaultYears, startDate);
+                const customFlows = buildCustomPlanFlowsFromTable(customYears, startDate);
+                const timingAdjustment = computeTimingAdjustment(unitPrice, defaultFlows, customFlows, interestRate, discountRate);
+                
+                actualCustomTotal = calculatedTotal + timingAdjustment;
+            } catch (e) {
+                console.warn('Timing adjustment skipped in updateCustomTotal:', e);
+                actualCustomTotal = calculatedTotal;
+            }
             
             document.getElementById('customTotal').textContent = formatCurrency(actualCustomTotal) + ' ج.م';
             
