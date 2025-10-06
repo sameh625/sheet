@@ -531,8 +531,12 @@
                             <label>نوع الخطة</label>
                             <select id="planType" onchange="calculate()">
                                 <option value="custom">خطة مخصصة</option>
-                                <option value="cash">دفع كاش (خصم 30%)</option>
+                                <option value="cash">دفع كاش (خصم مخصص)</option>
                             </select>
+                        </div>
+                        <div class="input-group" id="cashDiscountGroup" style="display: none;">
+                            <label>نسبة الخصم للدفع الكاش (%)</label>
+                            <input type="number" id="cashDiscountRate" value="30" step="1" min="0" max="100" oninput="calculate()">
                         </div>
                     </div>
                 </div>
@@ -659,6 +663,14 @@
             const customYears = parseFloat(document.getElementById('customYears').value) || 6;
             const defaultYears = parseFloat(document.getElementById('defaultYears').value) || 6;
             const planType = document.getElementById('planType').value;
+            
+            // إظهار/إخفاء حقل خصم الكاش
+            const cashDiscountGroup = document.getElementById('cashDiscountGroup');
+            if (planType === 'cash') {
+                cashDiscountGroup.style.display = 'block';
+            } else {
+                cashDiscountGroup.style.display = 'none';
+            }
             
             // تحديث البيانات الأساسية
             document.getElementById('displayPrice').textContent = formatCurrency(unitPrice) + ' ج.م';
@@ -946,21 +958,34 @@
         }
         
         function calculateCashPlan(unitPrice) {
-            const cashAmount = unitPrice * 0.7;
+            const cashDiscountRate = parseFloat(document.getElementById('cashDiscountRate').value) || 30;
+            const discountPercent = Math.min(100, Math.max(0, cashDiscountRate)); // التأكد من أن القيمة بين 0 و 100
+            const paymentPercent = 100 - discountPercent;
+            const cashAmount = unitPrice * (paymentPercent / 100);
+            
             actualCustomTotal = cashAmount;
             document.getElementById('customTotal').textContent = formatCurrency(cashAmount) + ' ج.م';
             
             const diff = cashAmount - actualDefaultTotal;
             document.getElementById('customDiff').textContent = formatCurrency(Math.abs(diff)) + ' ج.م';
-            document.getElementById('customDiffType').textContent = 'توفير (خصم 30%)';
-            document.getElementById('customDiffType').style.color = '#28a745';
+            
+            if (diff < 0) {
+                document.getElementById('customDiffType').textContent = `توفير (خصم ${discountPercent}%)`;
+                document.getElementById('customDiffType').style.color = '#28a745';
+            } else if (diff > 0) {
+                document.getElementById('customDiffType').textContent = `زيادة (خصم ${discountPercent}%)`;
+                document.getElementById('customDiffType').style.color = '#dc3545';
+            } else {
+                document.getElementById('customDiffType').textContent = `نفس السعر (خصم ${discountPercent}%)`;
+                document.getElementById('customDiffType').style.color = '#667eea';
+            }
             
             const tbody = document.getElementById('customTableBody');
             tbody.innerHTML = `
                 <tr class="highlight">
                     <td>0</td>
                     <td>${formatDate(new Date())}</td>
-                    <td>70.00%</td>
+                    <td>${paymentPercent.toFixed(2)}%</td>
                     <td class="number">${formatCurrency(cashAmount)}</td>
                     <td class="number">0</td>
                 </tr>
@@ -1430,16 +1455,19 @@
             `;
             
             // الدفع الكاش
-            const cashTotal = unitPrice * 0.7;
+            const cashDiscountRate = parseFloat(document.getElementById('cashDiscountRate').value) || 30;
+            const cashDiscountPercent = Math.min(100, Math.max(0, cashDiscountRate));
+            const cashTotal = unitPrice * ((100 - cashDiscountPercent) / 100);
             const cashDiff = cashTotal - defaultTotal;
             const cashDiffText = cashDiff < 0 ? `-${formatCurrency(Math.abs(cashDiff))}` : `+${formatCurrency(cashDiff)}`;
+            const cashDiffClass = cashDiff < 0 ? 'savings' : 'additional';
             tbody.innerHTML += `
                 <tr>
                     <td><strong>دفع كاش</strong></td>
                     <td>دفعة واحدة</td>
                     <td class="number">${formatCurrency(cashTotal)}</td>
-                    <td class="number savings">${cashDiffText}</td>
-                    <td>خصم 30% من السعر الأساسي</td>
+                    <td class="number ${cashDiffClass}">${cashDiffText}</td>
+                    <td>خصم ${cashDiscountPercent}% من السعر الأساسي</td>
                 </tr>
             `;
         }
